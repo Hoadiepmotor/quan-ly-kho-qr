@@ -1,130 +1,162 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8">
-  <title>Quản lý kho QR</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<title>Quản lý kho QR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 10px;
-    }
-    #reader {
-      width: 100%;
-      max-width: 400px;
-      margin: auto;
-    }
-    select, input, button {
-      font-size: 16px;
-      padding: 6px;
-      margin: 5px;
-    }
-  </style>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 10px;
+}
+#reader {
+  width: 100%;
+  max-width: 400px;
+  margin: auto;
+}
+select, button {
+  font-size: 16px;
+  padding: 8px;
+  margin: 6px;
+}
+.warn { color:red; font-weight:bold }
+.ok { color:green; font-weight:bold }
+</style>
 </head>
 
 <body>
 
-<h2>📦 Quét QR sản phẩm</h2>
+<h2>📦 Quản lý kho QR</h2>
 
-<div id="reader"></div>
-<div id="result">Chưa quét QR</div>
+<!-- QUÉT QR -->
+<div id="scanScreen">
+  <div id="reader"></div>
+  <div id="result">Chưa quét QR</div>
+</div>
 
-<!-- MÀN HÌNH KẾT QUẢ -->
-<div id="resultScreen" style="display:none; margin-top:20px;">
-  <h3>📦 Thông tin sản phẩm</h3>
+<!-- KẾT QUẢ QR -->
+<div id="resultScreen" style="display:none">
+  <h3>Thông tin QR</h3>
   <p id="qrValue"></p>
 
   <label>Hành động</label><br>
   <select id="action">
-    <option value="in">➕ Nhập kho</option>
-    <option value="out">➖ Xuất bán</option>
-    <option value="move">🔄 Điều chuyển</option>
+    <option value="in">Nhập kho</option>
+    <option value="out">Xuất bán</option>
+    <option value="move">Điều chuyển</option>
+    <option value="check">Kiểm kê</option>
   </select><br>
 
-  <label>Số lượng</label><br>
-  <input type="number" id="qty" value="1" min="1"><br>
+  <label>Cửa hàng</label><br>
+  <select id="store">
+    <option>242</option>
+    <option>250</option>
+    <option>300</option>
+    <option>239</option>
+    <option>891</option>
+    <option>581</option>
+  </select><br>
 
-  <button onclick="saveTransaction()">💾 Lưu</button>
-  <button onclick="location.reload()">🔁 Quét tiếp</button>
-
-  <hr>
-  <h4>📊 Tồn kho hiện tại</h4>
-  <p id="stock">0</p>
+  <button onclick="saveAction()">💾 Lưu</button>
+  <button onclick="location.reload()">🔁 Quét lại</button>
 </div>
 
-<!-- THƯ VIỆN QUÉT QR -->
+<hr>
+
+<button onclick="showSummary()">📊 KẾT QUẢ KIỂM KÊ</button>
+<button onclick="showHistory()">📜 LỊCH SỬ</button>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
-
 <script>
-  let currentCode = "";
+/* =========================
+   DANH SÁCH GỐC (ADD SAU)
+========================= */
+const MASTER = JSON.parse(localStorage.getItem("MASTER") || "[]");
 
-  const html5QrCode = new Html5Qrcode("reader");
+/* =========================
+   TIỆN ÍCH
+========================= */
+const today = () => new Date().toISOString().slice(0,10);
+const load = k => JSON.parse(localStorage.getItem(k) || "[]");
+const save = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
 
-  Html5Qrcode.getCameras().then(cameras => {
-    if (!cameras || cameras.length === 0) {
-      alert("Không tìm thấy camera");
-      return;
+/* =========================
+   CAMERA SAU
+========================= */
+const qr = new Html5Qrcode("reader");
+Html5Qrcode.getCameras().then(cams=>{
+  const cam = cams.find(c=>c.label.toLowerCase().includes("back")) || cams[cams.length-1];
+  qr.start(cam.id,{fps:10,qrbox:250},onScan);
+});
+
+function onScan(text){
+  qr.stop();
+  window.currentQR = text;
+  document.getElementById("qrValue").innerHTML = "<b>"+text+"</b>";
+  document.getElementById("scanScreen").style.display="none";
+  document.getElementById("resultScreen").style.display="block";
+}
+
+/* =========================
+   LƯU HÀNH ĐỘNG
+========================= */
+function saveAction(){
+  const action = actionEl.value;
+  const store = storeEl.value;
+
+  const history = load("HISTORY");
+  history.push({
+    qr: currentQR,
+    action,
+    store,
+    time: new Date().toLocaleString()
+  });
+  save("HISTORY", history);
+
+  if(action!=="out"){
+    const check = load("CHECK_"+today());
+    check.push({qr:currentQR,store});
+    save("CHECK_"+today(),check);
+  }
+
+  alert("Đã lưu ✔");
+  location.reload();
+}
+
+/* =========================
+   KIỂM KÊ
+========================= */
+function showSummary(){
+  const checks = load("CHECK_"+today());
+  let warn = false;
+  let html = "<h3>KẾT QUẢ KIỂM KÊ HÔM NAY</h3>";
+
+  MASTER.forEach(x=>{
+    if(x.sold) return;
+    const found = checks.find(c=>c.qr===x.qr && c.store===x.store);
+    if(!found){
+      warn = true;
+      html += `<div class="warn">🚨 ${x.qr} - ${x.store}</div>`;
     }
-
-    const backCamera =
-      cameras.find(cam => cam.label.toLowerCase().includes("back")) ||
-      cameras[cameras.length - 1];
-
-    html5QrCode.start(
-      backCamera.id,
-      { fps: 10, qrbox: 250 },
-      decodedText => {
-        currentCode = decodedText;
-
-        document.getElementById("qrValue").innerHTML =
-          "Mã sản phẩm: <b>" + decodedText + "</b>";
-
-        html5QrCode.stop();
-
-        document.getElementById("reader").style.display = "none";
-        document.getElementById("result").style.display = "none";
-        document.getElementById("resultScreen").style.display = "block";
-
-        showStock();
-      }
-    );
   });
 
-  function getStockData() {
-    return JSON.parse(localStorage.getItem("stockData")) || {};
-  }
+  if(!warn) html += `<div class="ok">✅ XONG</div>`;
+  document.body.innerHTML = html + `<br><button onclick="location.reload()">⬅ Quay lại</button>`;
+}
 
-  function saveStockData(data) {
-    localStorage.setItem("stockData", JSON.stringify(data));
-  }
-
-  function showStock() {
-    const data = getStockData();
-    document.getElementById("stock").innerText = data[currentCode] || 0;
-  }
-
-  function saveTransaction() {
-    const action = document.getElementById("action").value;
-    const qty = parseInt(document.getElementById("qty").value);
-
-    if (!qty || qty <= 0) {
-      alert("Số lượng không hợp lệ");
-      return;
-    }
-
-    const data = getStockData();
-    if (!data[currentCode]) data[currentCode] = 0;
-
-    if (action === "in") data[currentCode] += qty;
-    if (action === "out" || action === "move") data[currentCode] -= qty;
-
-    saveStockData(data);
-    showStock();
-
-    alert("✅ Đã lưu giao dịch");
-  }
+/* =========================
+   LỊCH SỬ
+========================= */
+function showHistory(){
+  const h = load("HISTORY");
+  let html="<h3>LỊCH SỬ THAO TÁC</h3>";
+  h.forEach(x=>{
+    html+=`${x.time} | ${x.qr} | ${x.action} | ${x.store}<br>`;
+  });
+  document.body.innerHTML = html + `<br><button onclick="location.reload()">⬅ Quay lại</button>`;
+}
 </script>
 
 </body>
