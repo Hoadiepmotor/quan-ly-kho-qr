@@ -6,29 +6,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  padding: 10px;
-}
-#reader {
-  width: 100%;
-  max-width: 400px;
-  margin: auto;
-}
-select, button, textarea {
-  font-size: 16px;
-  padding: 8px;
-  margin: 6px;
+body { font-family: Arial; text-align: center; padding: 10px; }
+#reader { width: 100%; max-width: 400px; margin: auto; }
+select, button, textarea, input {
+  font-size: 16px; padding: 8px; margin: 6px;
 }
 .warn { color:red; font-weight:bold }
 .ok { color:green; font-weight:bold }
-.box {
-  border:1px solid #ccc;
-  padding:10px;
-  margin:10px;
-  border-radius:8px;
-}
+.box { border:1px solid #ccc; padding:10px; margin:10px; border-radius:8px; }
 </style>
 </head>
 
@@ -36,32 +21,33 @@ select, button, textarea {
 
 <h2>📦 Quản lý kho QR</h2>
 
-<!-- ===== MENU ===== -->
-<button onclick="showImport()">📥 NHẬP DANH SÁCH CHUẨN</button>
-<button onclick="location.reload()">📷 QUÉT QR</button>
-
-<hr>
-
-<!-- ================= QUÉT QR ================= -->
-<div id="scanScreen">
-  <div id="reader"></div>
+<!-- ================= MENU ================= -->
+<div id="menu">
+  <button onclick="showStore()">👷 Nhân viên</button>
+  <button onclick="showLogin()">👨‍💼 Quản lý</button>
 </div>
 
-<!-- ================= KẾT QUẢ ================= -->
-<div id="resultScreen" style="display:none">
-  <h3>Thông tin QR</h3>
-  <p id="qrValue"></p>
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen" style="display:none">
+  <h3>🔐 Đăng nhập quản lý</h3>
+  <input type="password" id="password" placeholder="Nhập mật khẩu"><br>
+  <button onclick="login()">Đăng nhập</button>
+  <button onclick="location.reload()">⬅ Quay lại</button>
+</div>
 
-  <label>Hành động</label><br>
-  <select id="action">
-    <option value="in">Nhập kho</option>
-    <option value="out">Xuất bán</option>
-    <option value="move">Điều chuyển</option>
-    <option value="check">Kiểm kê</option>
-  </select><br>
+<!-- ================= QUẢN LÝ ================= -->
+<div id="adminScreen" style="display:none">
+  <h3>👨‍💼 QUẢN LÝ</h3>
+  <button onclick="showImport()">📥 Nhập danh sách chuẩn</button><br>
+  <button onclick="resetAll()">🗑 Reset dữ liệu kiểm kê</button><br>
+  <button onclick="logout()">🚪 Đăng xuất</button>
+</div>
 
-  <label>Cửa hàng</label><br>
-  <select id="store">
+<!-- ================= NHÂN VIÊN ================= -->
+<div id="storeScreen" style="display:none">
+  <h3>🏪 Chọn cửa hàng</h3>
+  <select id="storeSelect">
+    <option value="">-- Chọn cửa hàng --</option>
     <option>242</option>
     <option>250</option>
     <option>300</option>
@@ -69,139 +55,174 @@ select, button, textarea {
     <option>891</option>
     <option>581</option>
   </select><br>
+  <button onclick="startSession()">▶ Bắt đầu kiểm kê</button>
+</div>
 
-  <button onclick="saveAction()">💾 Lưu</button>
+<!-- ================= QUÉT QR ================= -->
+<div id="scanScreen" style="display:none">
+  <h3>📷 Kiểm kê cửa hàng <span id="currentStore"></span></h3>
+  <div id="reader"></div>
+</div>
+
+<!-- ================= KẾT QUẢ ================= -->
+<div id="resultScreen" style="display:none">
+  <h3 id="qrValue"></h3>
+  <button onclick="saveCheck()">💾 Ghi nhận</button>
+  <button onclick="resumeScan()">🔁 Quét tiếp</button>
 </div>
 
 <hr>
-
-<button onclick="showSummary()">📊 KẾT QUẢ KIỂM KÊ</button>
-<button onclick="showHistory()">📜 LỊCH SỬ</button>
+<button onclick="showSummary()">📊 Kết quả</button>
+<button onclick="showHistory()">📜 Lịch sử</button>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
+/* ===== CẤU HÌNH ===== */
+const ADMIN_PASS = "123456"; // 🔴 ĐỔI MẬT KHẨU TẠI ĐÂY
+
 /* ===== TIỆN ÍCH ===== */
 const today = () => new Date().toISOString().slice(0,10);
 const load = k => JSON.parse(localStorage.getItem(k) || "[]");
 const save = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
 
-/* ===== CAMERA ===== */
-const qr = new Html5Qrcode("reader");
-Html5Qrcode.getCameras().then(cams=>{
-  const cam = cams.find(c=>c.label.toLowerCase().includes("back")) || cams[cams.length-1];
-  qr.start(cam.id,{fps:10,qrbox:250},onScan);
-});
-
-/* ===== QUÉT QR ===== */
-function onScan(text){
-  const master = load("MASTER");
-  if(master.length && !master.find(x=>x.qr===text)){
-    alert("❌ QR KHÔNG THUỘC DANH SÁCH CHUẨN");
-    return;
-  }
-
-  qr.stop();
-  window.currentQR = text;
-  document.getElementById("qrValue").innerHTML = "<b>"+text+"</b>";
-  document.getElementById("scanScreen").style.display="none";
-  document.getElementById("resultScreen").style.display="block";
+/* ===== MENU ===== */
+function showStore(){
+  menu.style.display="none";
+  storeScreen.style.display="block";
 }
 
-/* ===== LƯU ===== */
-function saveAction(){
-  const action = actionSel.value;
-  const store  = storeSel.value;
+function showLogin(){
+  menu.style.display="none";
+  loginScreen.style.display="block";
+}
 
-  const history = load("HISTORY");
-  history.push({qr:currentQR,action,store,time:new Date().toLocaleString()});
-  save("HISTORY",history);
+/* ===== LOGIN ===== */
+function login(){
+  if(password.value !== ADMIN_PASS) return alert("❌ Sai mật khẩu");
+  localStorage.setItem("ADMIN","1");
+  loginScreen.style.display="none";
+  adminScreen.style.display="block";
+}
 
-  let master = load("MASTER");
-  let item = master.find(x=>x.qr===currentQR);
-
-  if(!item){
-    item = {qr:currentQR,store,sold:false};
-    master.push(item);
-  }
-
-  if(action==="out") item.sold=true;
-  else item.store=store;
-
-  save("MASTER",master);
-
-  if(action!=="out"){
-    const key="CHECK_"+today();
-    let checks=load(key).filter(c=>c.qr!==currentQR);
-    checks.push({qr:currentQR,store});
-    save(key,checks);
-  }
-
-  alert("✅ Đã lưu");
+function logout(){
+  localStorage.removeItem("ADMIN");
   location.reload();
 }
 
-/* ===== NHẬP MASTER ===== */
+/* ===== SESSION NHÂN VIÊN ===== */
+function startSession(){
+  if(!storeSelect.value) return alert("❌ Chưa chọn cửa hàng");
+  localStorage.setItem("CURRENT_STORE",storeSelect.value);
+  location.reload();
+}
+
+const CURRENT_STORE = localStorage.getItem("CURRENT_STORE");
+
+/* ===== CAMERA ===== */
+let qr;
+function startCamera(){
+  qr = new Html5Qrcode("reader");
+  Html5Qrcode.getCameras().then(cams=>{
+    qr.start(cams[0].id,{fps:10,qrbox:250},onScan);
+  });
+}
+
+/* ===== QUÉT ===== */
+function onScan(text){
+  const master = load("MASTER");
+  const item = master.find(x=>x.qr===text);
+
+  if(master.length && !item) return alert("❌ HÀNG NGOÀI");
+  if(item.sold) return alert("❌ ĐÃ BÁN");
+  if(item.store!==CURRENT_STORE) return alert("⚠️ SAI CỬA HÀNG");
+
+  qr.stop();
+  window.currentQR=text;
+  qrValue.innerText=text;
+  resultScreen.style.display="block";
+}
+
+/* ===== GHI NHẬN ===== */
+function saveCheck(){
+  const key="CHECK_"+today()+"_"+CURRENT_STORE;
+  let c=load(key).filter(x=>x!==currentQR);
+  c.push(currentQR);
+  save(key,c);
+
+  const h=load("HISTORY");
+  h.push({qr:currentQR,store:CURRENT_STORE,time:new Date().toLocaleString()});
+  save("HISTORY",h);
+
+  resumeScan();
+}
+
+function resumeScan(){
+  resultScreen.style.display="none";
+  startCamera();
+}
+
+/* ===== MASTER ===== */
 function showImport(){
   document.body.innerHTML=`
-    <h3>📥 NHẬP DANH SÁCH CHUẨN</h3>
-    <textarea id="input" rows="10" style="width:100%"
-    placeholder="QR001,242\nQR002,250"></textarea><br>
-    <button onclick="importMaster()">💾 Lưu</button>
-    <button onclick="location.reload()">⬅ Quay lại</button>`;
+  <h3>📥 NHẬP MASTER</h3>
+  <textarea id="input" rows="10" style="width:100%"
+  placeholder="QR001,242"></textarea><br>
+  <button onclick="importMaster()">💾 Lưu</button>
+  <button onclick="location.reload()">⬅ Quay lại</button>`;
 }
 
 function importMaster(){
-  const lines=document.getElementById("input").value.trim().split("\n");
-  let master=[];
-  lines.forEach(l=>{
-    const [qr,store]=l.split(",");
-    if(qr&&store) master.push({qr:qr.trim(),store:store.trim(),sold:false});
+  if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
+  let m=[];
+  input.value.trim().split("\n").forEach(l=>{
+    let [qr,store]=l.split(",");
+    if(qr&&store) m.push({qr:qr.trim(),store:store.trim(),sold:false});
   });
-  save("MASTER",master);
-  alert("✅ Đã nhập danh sách chuẩn");
+  save("MASTER",m);
+  alert("✅ Đã nhập MASTER");
   location.reload();
 }
 
-/* ===== KIỂM KÊ ===== */
+/* ===== RESET ===== */
+function resetAll(){
+  if(!confirm("Reset toàn bộ kiểm kê?")) return;
+  Object.keys(localStorage).forEach(k=>{
+    if(k.startsWith("CHECK_")||k==="HISTORY") localStorage.removeItem(k);
+  });
+  alert("✅ Đã reset");
+}
+
+/* ===== BÁO CÁO ===== */
 function showSummary(){
-  const checks=load("CHECK_"+today());
-  const master=load("MASTER");
-  let html=`<h3>📊 KIỂM KÊ ${today()}</h3><div class="box">`;
-  let warn=false;
-
-  master.forEach(m=>{
-    if(m.sold) return;
-    if(!checks.find(c=>c.qr===m.qr && c.store===m.store)){
-      warn=true;
-      html+=`<div class="warn">❌ THIẾU: ${m.qr} | CH ${m.store}</div>`;
-    }
+  const m=load("MASTER").filter(x=>!x.sold&&x.store===CURRENT_STORE);
+  const c=load("CHECK_"+today()+"_"+CURRENT_STORE);
+  let h=`<h3>📊 ${CURRENT_STORE}</h3><div class="box">`;
+  let w=false;
+  m.forEach(x=>{
+    if(!c.includes(x.qr)){w=true;h+=`<div class="warn">❌ ${x.qr}</div>`;}
   });
-
-  checks.forEach(c=>{
-    if(!master.find(m=>m.qr===c.qr)){
-      warn=true;
-      html+=`<div class="warn">⚠️ HÀNG NGOÀI: ${c.qr}</div>`;
-    }
-  });
-
-  if(!warn) html+=`<div class="ok">✅ TẤT CẢ ĐÚNG CHUẨN</div>`;
-  html+=`</div><button onclick="location.reload()">⬅ Quay lại</button>`;
-  document.body.innerHTML=html;
+  if(!w) h+=`<div class="ok">✅ OK</div>`;
+  h+=`</div><button onclick="location.reload()">⬅</button>`;
+  document.body.innerHTML=h;
 }
 
-/* ===== LỊCH SỬ ===== */
 function showHistory(){
-  const h=load("HISTORY");
-  let html=`<h3>📜 LỊCH SỬ</h3><div class="box">`;
-  h.forEach(x=>{
-    html+=`${x.time} | ${x.qr} | ${x.action} | CH ${x.store}<br>`;
+  let h=`<h3>📜 LỊCH SỬ</h3><div class="box">`;
+  load("HISTORY").forEach(x=>{
+    h+=`${x.time} | ${x.qr} | ${x.store}<br>`;
   });
-  html+=`</div><button onclick="location.reload()">⬅ Quay lại</button>`;
-  document.body.innerHTML=html;
+  h+=`</div><button onclick="location.reload()">⬅</button>`;
+  document.body.innerHTML=h;
 }
 
-const actionSel=document.getElementById("action");
-const storeSel=document.getElementById("store");
+/* ===== AUTO ===== */
+if(CURRENT_STORE){
+  menu.style.display="none";
+  storeScreen.style.display="none";
+  scanScreen.style.display="block";
+  currentStore.innerText=CURRENT_STORE;
+  startCamera();
+}
 </script>
 
 </body>
