@@ -21,13 +21,13 @@ select, button, textarea, input {
 
 <h2>📦 Quản lý kho QR</h2>
 
-<!-- ================= MENU ================= -->
+<!-- MENU -->
 <div id="menu">
   <button onclick="goEmployee()">👷 Nhân viên</button>
   <button onclick="goLogin()">👨‍💼 Quản lý</button>
 </div>
 
-<!-- ================= LOGIN ================= -->
+<!-- LOGIN -->
 <div id="loginScreen" style="display:none">
   <h3>🔐 Đăng nhập quản lý</h3>
   <input type="password" id="password" placeholder="Mật khẩu"><br>
@@ -35,16 +35,16 @@ select, button, textarea, input {
   <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ================= ADMIN ================= -->
+<!-- ADMIN -->
 <div id="adminScreen" style="display:none">
   <h3>👨‍💼 QUẢN LÝ</h3>
-  <button onclick="showImport()">📥 Nhập / cập nhật MASTER</button><br>
-  <button onclick="showMaster()">📋 Xem danh sách MASTER</button><br>
+  <button onclick="showImport()">📥 Nhập MASTER</button><br>
+  <button onclick="showMaster()">📋 Xem MASTER</button><br>
   <button onclick="logout()">🚪 Đăng xuất</button><br>
   <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ================= STORE ================= -->
+<!-- STORE -->
 <div id="storeScreen" style="display:none">
   <h3>🏪 Chọn cửa hàng</h3>
   <select id="storeSelect">
@@ -60,14 +60,13 @@ select, button, textarea, input {
   <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ================= SCAN ================= -->
+<!-- SCAN -->
 <div id="scanScreen" style="display:none">
   <h3>📷 Kiểm kê CH <span id="currentStore"></span></h3>
   <div id="reader"></div>
-  <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ================= RESULT ================= -->
+<!-- RESULT -->
 <div id="resultScreen" style="display:none">
   <h3 id="qrValue"></h3>
   <button onclick="saveCheck()">💾 Ghi nhận</button>
@@ -80,17 +79,19 @@ select, button, textarea, input {
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
-/* ===== CẤU HÌNH ===== */
+/* ===== CONFIG ===== */
 const ADMIN_PASS = "123456";
+let CURRENT_STORE = null;
+let scanner = null;
+let currentQR = null;
 
-/* ===== TIỆN ÍCH ===== */
+/* ===== UTILS ===== */
 const today = () => new Date().toISOString().slice(0,10);
 const load = k => JSON.parse(localStorage.getItem(k) || "[]");
 const save = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const hideAll = () =>
-  document.querySelectorAll("div").forEach(d=>d.style.display="none");
+const hideAll = () => document.querySelectorAll("div").forEach(d=>d.style.display="none");
 
-/* ===== ĐIỀU HƯỚNG ===== */
+/* ===== NAV ===== */
 function goHome(){ location.reload(); }
 function goEmployee(){ hideAll(); storeScreen.style.display="block"; }
 function goLogin(){ hideAll(); loginScreen.style.display="block"; }
@@ -108,61 +109,60 @@ function logout(){
 }
 
 /* ===== SESSION ===== */
-let CURRENT_STORE = null;
-
 function startSession(){
   if(!storeSelect.value) return alert("❌ Chưa chọn cửa hàng");
   CURRENT_STORE = storeSelect.value;
-  localStorage.setItem("CURRENT_STORE",CURRENT_STORE);
   hideAll();
   scanScreen.style.display="block";
   currentStore.innerText = CURRENT_STORE;
-  startCamera();
+  startScanner();
 }
 
-/* ===== CAMERA ===== */
-let qrScanner;
+/* ===== SCANNER CORE ===== */
+function startScanner(){
+  document.getElementById("reader").innerHTML = "";
+  scanner = new Html5Qrcode("reader");
 
-function startCamera(){
-  qrScanner = new Html5Qrcode("reader");
   Html5Qrcode.getCameras().then(cams=>{
-    const cam =
-      cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[cams.length-1];
-    qrScanner.start(cam.id,{fps:10,qrbox:250},onScan);
+    const cam = cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[0];
+    scanner.start(cam.id,{fps:10,qrbox:250},handleScan);
   });
 }
 
-/* ===== SCAN LOGIC ===== */
-function onScan(text){
+function stopScanner(){
+  if(scanner){
+    scanner.stop().then(()=>scanner.clear());
+    scanner = null;
+  }
+}
+
+/* ===== SCAN HANDLER ===== */
+function handleScan(text){
   const master = load("MASTER");
-  const item = master.find(x=>x.qr===text);
+  const item = master.find(x=>x.qr === text);
 
-  if(master.length && !item){
-    alert("❌ MÃ KHÔNG CÓ TRONG CỬA HÀNG");
+  if(!item){
+    alert("❌ MÃ KHÔNG CÓ TRONG MASTER");
+    return;
+  }
+  if(item.store !== CURRENT_STORE){
+    alert("❌ SAI CỬA HÀNG");
     return;
   }
 
-  if(item?.sold){
-    alert("❌ MÃ ĐÃ BÁN");
-    return;
-  }
-
-  if(item && item.store !== CURRENT_STORE){
-    alert("⚠️ SAI CỬA HÀNG");
-    return;
-  }
-
-  qrScanner.stop();
-  window.currentQR = text;
+  stopScanner();
+  currentQR = text;
   qrValue.innerText = text;
   resultScreen.style.display="block";
 }
 
-/* ===== SAVE CHECK ===== */
+/* ===== SAVE ===== */
 function saveCheck(){
+  if(!currentQR) return;
+
   const key = "CHECK_"+today()+"_"+CURRENT_STORE;
-  let c = load(key).filter(x=>x!==currentQR);
-  c.push(currentQR);
+  let c = load(key);
+  if(!c.includes(currentQR)) c.push(currentQR);
   save(key,c);
 
   let h = load("HISTORY");
@@ -172,16 +172,17 @@ function saveCheck(){
   resumeScan();
 }
 
+/* ===== RESUME ===== */
 function resumeScan(){
   resultScreen.style.display="none";
-  setTimeout(()=>startCamera(),500);
+  currentQR = null;
+  setTimeout(startScanner,300);
 }
 
 /* ===== MASTER ===== */
 function showImport(){
-  if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
   document.body.innerHTML=`
-    <h3>📥 NHẬP / CẬP NHẬT MASTER</h3>
+    <h3>📥 NHẬP MASTER</h3>
     <textarea id="input" rows="10" style="width:100%"
     placeholder="QR001,242"></textarea><br>
     <button onclick="importMaster()">💾 Lưu</button>
@@ -192,20 +193,17 @@ function importMaster(){
   let m=[];
   input.value.trim().split("\n").forEach(l=>{
     let [qr,store]=l.split(",");
-    if(qr&&store) m.push({qr:qr.trim(),store:store.trim(),sold:false});
+    if(qr&&store) m.push({qr:qr.trim(),store:store.trim()});
   });
   save("MASTER",m);
-  alert("✅ MASTER đã cập nhật");
+  alert("✅ Đã lưu MASTER");
   location.reload();
 }
 
 function showMaster(){
-  if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
-  const m = load("MASTER");
-  let html = `<h3>📋 MASTER (${m.length})</h3><div class="box">`;
-  m.forEach(x=>{
-    html+=`${x.qr} | CH ${x.store}<br>`;
-  });
+  const m=load("MASTER");
+  let html=`<h3>📋 MASTER</h3><div class="box">`;
+  m.forEach(x=>html+=`${x.qr} | CH ${x.store}<br>`);
   html+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
   document.body.innerHTML=html;
 }
