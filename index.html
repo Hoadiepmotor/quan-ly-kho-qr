@@ -1,104 +1,33 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="utf-8">
-<title>Quản lý kho QR</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-body { font-family: Arial; text-align: center; padding: 10px; }
-#reader { width: 100%; max-width: 400px; margin: auto; }
-select, button, textarea, input {
-  font-size: 16px; padding: 8px; margin: 6px;
-}
-.warn { color:red; font-weight:bold }
-.ok { color:green; font-weight:bold }
-.box { border:1px solid #ccc; padding:10px; margin:10px; border-radius:8px; }
-</style>
-</head>
-
-<body>
-
-<h2>📦 Quản lý kho QR</h2>
-
-<!-- ================= MENU ================= -->
-<div id="menu">
-  <button onclick="goEmployee()">👷 Nhân viên</button>
-  <button onclick="goLogin()">👨‍💼 Quản lý</button>
-</div>
-
-<!-- ================= LOGIN ================= -->
-<div id="loginScreen" style="display:none">
-  <h3>🔐 Đăng nhập quản lý</h3>
-  <input type="password" id="password" placeholder="Mật khẩu"><br>
-  <button onclick="login()">Đăng nhập</button>
-  <button onclick="goHome()">⬅ Trang chủ</button>
-</div>
-
-<!-- ================= ADMIN ================= -->
-<div id="adminScreen" style="display:none">
-  <h3>👨‍💼 QUẢN LÝ</h3>
-  <button onclick="showImport()">📥 Nhập / cập nhật MASTER</button><br>
-  <button onclick="logout()">🚪 Đăng xuất</button><br>
-  <button onclick="goHome()">⬅ Trang chủ</button>
-</div>
-
-<!-- ================= NHÂN VIÊN ================= -->
-<div id="storeScreen" style="display:none">
-  <h3>🏪 Chọn cửa hàng</h3>
-  <select id="storeSelect">
-    <option value="">-- Chọn --</option>
-    <option>242</option>
-    <option>250</option>
-    <option>300</option>
-    <option>239</option>
-    <option>891</option>
-    <option>581</option>
-  </select><br>
-  <button onclick="startSession()">▶ Bắt đầu</button>
-  <button onclick="goHome()">⬅ Trang chủ</button>
-</div>
-
-<!-- ================= SCAN ================= -->
-<div id="scanScreen" style="display:none">
-  <h3>📷 Kiểm kê CH <span id="currentStore"></span></h3>
-  <div id="reader"></div>
-  <button onclick="goHome()">⬅ Trang chủ</button>
-</div>
-
-<!-- ================= RESULT ================= -->
-<div id="resultScreen" style="display:none">
-  <h3 id="qrValue"></h3>
-  <button onclick="saveCheck()">💾 Ghi nhận</button>
-  <button onclick="resumeScan()">🔁 Quét tiếp</button>
-</div>
-
-<hr>
-<button onclick="showSummary()">📊 Kết quả</button>
-<button onclick="showHistory()">📜 Lịch sử</button>
-
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
 /* ===== CẤU HÌNH ===== */
-const ADMIN_PASS = "123456"; // đổi nếu cần
+const ADMIN_PASS = "123456";
 
 /* ===== TIỆN ÍCH ===== */
 const today = () => new Date().toISOString().slice(0,10);
 const load = k => JSON.parse(localStorage.getItem(k) || "[]");
 const save = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const hideAll = () =>
-  document.querySelectorAll("div").forEach(d=>d.style.display="none");
+
+/* ===== ẨN / HIỆN SCREEN (KHÔNG ĐỤNG #reader) ===== */
+function hideScreens(){
+  menu.style.display="none";
+  loginScreen.style.display="none";
+  adminScreen.style.display="none";
+  storeScreen.style.display="none";
+  scanScreen.style.display="none";
+  resultScreen.style.display="none";
+}
 
 /* ===== ĐIỀU HƯỚNG ===== */
 function goHome(){ location.reload(); }
-function goEmployee(){ hideAll(); storeScreen.style.display="block"; }
-function goLogin(){ hideAll(); loginScreen.style.display="block"; }
+function goEmployee(){ hideScreens(); storeScreen.style.display="block"; }
+function goLogin(){ hideScreens(); loginScreen.style.display="block"; }
 
 /* ===== LOGIN ===== */
 function login(){
   if(password.value !== ADMIN_PASS) return alert("❌ Sai mật khẩu");
   localStorage.setItem("ADMIN","1");
-  hideAll();
+  hideScreens();
   adminScreen.style.display="block";
 }
 function logout(){
@@ -107,25 +36,42 @@ function logout(){
 }
 
 /* ===== SESSION ===== */
+let CURRENT_STORE = null;
+
 function startSession(){
   if(!storeSelect.value) return alert("❌ Chưa chọn cửa hàng");
-  localStorage.setItem("CURRENT_STORE",storeSelect.value);
-  hideAll();
+  CURRENT_STORE = storeSelect.value;
+  localStorage.setItem("CURRENT_STORE", CURRENT_STORE);
+
+  hideScreens();
   scanScreen.style.display="block";
-  currentStore.innerText = storeSelect.value;
-  startCamera();
+  currentStore.innerText = CURRENT_STORE;
+
+  setTimeout(startCamera, 300); // ⬅️ rất quan trọng
 }
 
-const CURRENT_STORE = localStorage.getItem("CURRENT_STORE");
+/* ===== CAMERA (INSTANCE DUY NHẤT) ===== */
+let qrScanner = null;
 
-/* ===== CAMERA (ƯU TIÊN CAMERA SAU) ===== */
-let qr;
 function startCamera(){
-  qr = new Html5Qrcode("reader");
+  if(qrScanner){
+    qrScanner.clear().catch(()=>{});
+  }
+
+  qrScanner = new Html5Qrcode("reader");
+
   Html5Qrcode.getCameras().then(cams=>{
+    if(!cams.length) return alert("❌ Không tìm thấy camera");
+
     const cam =
-      cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[cams.length-1];
-    qr.start(cam.id,{fps:10,qrbox:250},onScan);
+      cams.find(c=>/back|rear|environment/i.test(c.label))
+      || cams[cams.length-1];
+
+    qrScanner.start(
+      cam.id,
+      { fps: 10, qrbox: 250 },
+      onScan
+    );
   });
 }
 
@@ -138,8 +84,9 @@ function onScan(text){
   if(item?.sold) return alert("❌ ĐÃ BÁN");
   if(item && item.store!==CURRENT_STORE) return alert("⚠️ SAI CỬA HÀNG");
 
-  qr.stop();
+  qrScanner.stop();
   window.currentQR = text;
+
   qrValue.innerText = text;
   resultScreen.style.display="block";
 }
@@ -157,12 +104,13 @@ function saveCheck(){
 
   resumeScan();
 }
+
 function resumeScan(){
   resultScreen.style.display="none";
-  startCamera();
+  setTimeout(startCamera,300);
 }
 
-/* ===== MASTER (KHÔNG XÓA CHECK) ===== */
+/* ===== MASTER ===== */
 function showImport(){
   if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
   document.body.innerHTML=`
@@ -172,6 +120,7 @@ function showImport(){
     <button onclick="importMaster()">💾 Lưu</button>
     <button onclick="location.reload()">⬅ Trang chủ</button>`;
 }
+
 function importMaster(){
   let m=[];
   input.value.trim().split("\n").forEach(l=>{
@@ -188,15 +137,20 @@ function showSummary(){
   if(!CURRENT_STORE) return alert("❌ Chưa chọn cửa hàng");
   const m=load("MASTER").filter(x=>!x.sold&&x.store===CURRENT_STORE);
   const c=load("CHECK_"+today()+"_"+CURRENT_STORE);
+
   let html=`<h3>📊 ${CURRENT_STORE}</h3><div class="box">`;
   let warn=false;
   m.forEach(x=>{
-    if(!c.includes(x.qr)){warn=true;html+=`<div class="warn">❌ ${x.qr}</div>`;}
+    if(!c.includes(x.qr)){
+      warn=true;
+      html+=`<div class="warn">❌ ${x.qr}</div>`;
+    }
   });
   if(!warn) html+=`<div class="ok">✅ OK</div>`;
   html+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
   document.body.innerHTML=html;
 }
+
 function showHistory(){
   let html=`<h3>📜 LỊCH SỬ</h3><div class="box">`;
   load("HISTORY").forEach(x=>{
@@ -206,6 +160,3 @@ function showHistory(){
   document.body.innerHTML=html;
 }
 </script>
-
-</body>
-</html>
