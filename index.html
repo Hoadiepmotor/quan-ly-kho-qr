@@ -16,11 +16,6 @@
       max-width: 400px;
       margin: auto;
     }
-    #result {
-      margin-top: 20px;
-      font-size: 18px;
-      color: green;
-    }
   </style>
 </head>
 
@@ -39,55 +34,47 @@
   <button onclick="location.reload()">🔁 Quét lại</button>
 </div>
 
+<!-- THƯ VIỆN QUÉT QR -->
 <script src="https://unpkg.com/html5-qrcode"></script>
-<script>
-  function onScanSuccess(decodedText) {
-  // hiển thị kết quả
-  document.getElementById("qrValue").innerHTML =
-    "Mã sản phẩm: <b>" + decodedText + "</b>";
 
-  // ẩn camera + text cũ
-  document.getElementById("reader").style.display = "none";
-  document.getElementById("result").style.display = "none";
-
-  // hiện màn hình kết quả
-  document.getElementById("resultScreen").style.display = "block";
-}
-
-  <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
   const html5QrCode = new Html5Qrcode("reader");
 
   Html5Qrcode.getCameras().then(cameras => {
-    if (cameras && cameras.length) {
-      html5QrCode.start(
-        cameras[0].id, // ép dùng camera
-        {
-          fps: 10,
-          qrbox: 250
-        },
-        decodedText => {
-          document.getElementById("qrValue").innerHTML =
-            "Mã sản phẩm: <b>" + decodedText + "</b>";
-
-          // tắt camera hoàn toàn
-          html5QrCode.stop();
-
-          document.getElementById("reader").style.display = "none";
-          document.getElementById("result").style.display = "none";
-          document.getElementById("resultScreen").style.display = "block";
-        }
-      );
+    if (!cameras || cameras.length === 0) {
+      alert("Không tìm thấy camera");
+      return;
     }
+
+    // 👉 ÉP DÙNG CAMERA SAU
+    const backCamera =
+      cameras.find(cam => cam.label.toLowerCase().includes("back")) ||
+      cameras[cameras.length - 1];
+
+    html5QrCode.start(
+      backCamera.id,
+      { fps: 10, qrbox: 250 },
+      decodedText => {
+        // hiển thị kết quả
+        document.getElementById("qrValue").innerHTML =
+          "Mã sản phẩm: <b>" + decodedText + "</b>";
+
+        // tắt camera hoàn toàn
+        html5QrCode.stop();
+
+        // ẩn màn hình quét
+        document.getElementById("reader").style.display = "none";
+        document.getElementById("result").style.display = "none";
+
+        // hiện màn hình kết quả
+        document.getElementById("resultScreen").style.display = "block";
+      }
+    );
   }).catch(err => {
-    alert("Không truy cập được camera: " + err);
+    alert("Lỗi camera: " + err);
   });
-</script>
 </script>
 
 </body>
 </html>
-
-html5QrcodeScanner.clear();
-
 
