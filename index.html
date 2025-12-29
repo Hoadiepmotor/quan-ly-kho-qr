@@ -146,4 +146,45 @@ function saveCheck(){
 
 function showImport(){
   if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
-  document.
+  document.body.innerHTML=`
+    <h3>📥 NHẬP MASTER</h3>
+    <textarea id="input" rows="10" style="width:100%"></textarea><br>
+    <button onclick="importMaster()">💾 Lưu</button>
+    <button onclick="location.reload()">⬅ Trang chủ</button>`;
+}
+function importMaster(){
+  let m=[];
+  input.value.trim().split("\n").forEach(l=>{
+    let [qr,store]=l.split(",");
+    if(qr&&store) m.push({qr:qr.trim(),store:store.trim(),sold:false});
+  });
+  save("MASTER",m);
+  alert("✅ Đã lưu MASTER");
+  location.reload();
+}
+
+function showSummary(){
+  if(!CURRENT_STORE) return alert("❌ Chưa chọn cửa hàng");
+  const m=load("MASTER").filter(x=>x.store===CURRENT_STORE);
+  const c=load("CHECK_"+today()+"_"+CURRENT_STORE);
+  let h=`<h3>📊 ${CURRENT_STORE}</h3><div class="box">`;
+  let w=false;
+  m.forEach(x=>{
+    if(!c.includes(x.qr)){w=true;h+=`<div class="warn">❌ ${x.qr}</div>`;}
+  });
+  if(!w) h+=`<div class="ok">✅ OK</div>`;
+  h+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
+  document.body.innerHTML=h;
+}
+function showHistory(){
+  let h=`<h3>📜 LỊCH SỬ</h3><div class="box">`;
+  load("HISTORY").forEach(x=>{
+    h+=`${x.time} | ${x.qr} | ${x.store}<br>`;
+  });
+  h+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
+  document.body.innerHTML=h;
+}
+</script>
+
+</body>
+</html>
