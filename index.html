@@ -1,3 +1,81 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Quản lý kho QR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body { font-family: Arial; text-align: center; padding: 10px; }
+button, select, input, textarea {
+  font-size:16px; padding:8px; margin:6px;
+}
+#reader { width:100%; max-width:400px; margin:auto; }
+.box { border:1px solid #ccc; padding:10px; margin:10px; border-radius:8px; }
+.warn { color:red; font-weight:bold }
+.ok { color:green; font-weight:bold }
+</style>
+</head>
+
+<body>
+
+<h2>📦 Quản lý kho QR</h2>
+
+<!-- ===== MENU ===== -->
+<div id="menu">
+  <button onclick="goEmployee()">👷 Nhân viên</button>
+  <button onclick="goLogin()">👨‍💼 Quản lý</button>
+</div>
+
+<!-- ===== LOGIN ===== -->
+<div id="loginScreen" style="display:none">
+  <h3>🔐 Đăng nhập quản lý</h3>
+  <input type="password" id="password" placeholder="Mật khẩu"><br>
+  <button onclick="login()">Đăng nhập</button>
+  <button onclick="goHome()">⬅ Trang chủ</button>
+</div>
+
+<!-- ===== ADMIN ===== -->
+<div id="adminScreen" style="display:none">
+  <h3>👨‍💼 QUẢN LÝ</h3>
+  <button onclick="showImport()">📥 Nhập / cập nhật MASTER</button><br>
+  <button onclick="logout()">🚪 Đăng xuất</button><br>
+  <button onclick="goHome()">⬅ Trang chủ</button>
+</div>
+
+<!-- ===== CHỌN CỬA HÀNG ===== -->
+<div id="storeScreen" style="display:none">
+  <h3>🏪 Chọn cửa hàng</h3>
+  <select id="storeSelect">
+    <option value="">-- Chọn --</option>
+    <option>242</option>
+    <option>250</option>
+    <option>300</option>
+    <option>239</option>
+    <option>891</option>
+    <option>581</option>
+  </select><br>
+  <button onclick="startSession()">▶ Bắt đầu kiểm kê</button>
+  <button onclick="goHome()">⬅ Trang chủ</button>
+</div>
+
+<!-- ===== SCAN (KHÔNG display:none) ===== -->
+<div id="scanScreen" style="visibility:hidden; height:0">
+  <h3>📷 Kiểm kê cửa hàng <span id="currentStore"></span></h3>
+  <div id="reader"></div>
+</div>
+
+<!-- ===== RESULT ===== -->
+<div id="resultScreen" style="display:none">
+  <h3 id="qrValue"></h3>
+  <button onclick="saveCheck()">💾 Ghi nhận</button>
+  <button onclick="resumeScan()">🔁 Quét tiếp</button>
+</div>
+
+<hr>
+<button onclick="showSummary()">📊 Kết quả</button>
+<button onclick="showHistory()">📜 Lịch sử</button>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
 /* ===== CẤU HÌNH ===== */
@@ -8,13 +86,12 @@ const today = () => new Date().toISOString().slice(0,10);
 const load = k => JSON.parse(localStorage.getItem(k) || "[]");
 const save = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
 
-/* ===== ẨN / HIỆN SCREEN (KHÔNG ĐỤNG #reader) ===== */
+/* ===== ẨN SCREEN ===== */
 function hideScreens(){
   menu.style.display="none";
   loginScreen.style.display="none";
   adminScreen.style.display="none";
   storeScreen.style.display="none";
-  scanScreen.style.display="none";
   resultScreen.style.display="none";
 }
 
@@ -40,17 +117,22 @@ let CURRENT_STORE = null;
 
 function startSession(){
   if(!storeSelect.value) return alert("❌ Chưa chọn cửa hàng");
+
   CURRENT_STORE = storeSelect.value;
   localStorage.setItem("CURRENT_STORE", CURRENT_STORE);
 
   hideScreens();
+
+  scanScreen.style.visibility="visible";
+  scanScreen.style.height="auto";
   scanScreen.style.display="block";
+
   currentStore.innerText = CURRENT_STORE;
 
-  setTimeout(startCamera, 300); // ⬅️ rất quan trọng
+  setTimeout(startCamera, 500);
 }
 
-/* ===== CAMERA (INSTANCE DUY NHẤT) ===== */
+/* ===== CAMERA ===== */
 let qrScanner = null;
 
 function startCamera(){
@@ -61,7 +143,7 @@ function startCamera(){
   qrScanner = new Html5Qrcode("reader");
 
   Html5Qrcode.getCameras().then(cams=>{
-    if(!cams.length) return alert("❌ Không tìm thấy camera");
+    if(!cams.length) return alert("❌ Không có camera");
 
     const cam =
       cams.find(c=>/back|rear|environment/i.test(c.label))
@@ -69,7 +151,7 @@ function startCamera(){
 
     qrScanner.start(
       cam.id,
-      { fps: 10, qrbox: 250 },
+      { fps:10, qrbox:250 },
       onScan
     );
   });
@@ -113,10 +195,11 @@ function resumeScan(){
 /* ===== MASTER ===== */
 function showImport(){
   if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
+
   document.body.innerHTML=`
     <h3>📥 NHẬP / CẬP NHẬT MASTER</h3>
     <textarea id="input" rows="10" style="width:100%"
-    placeholder="QR001,242"></textarea><br>
+      placeholder="QR001,242"></textarea><br>
     <button onclick="importMaster()">💾 Lưu</button>
     <button onclick="location.reload()">⬅ Trang chủ</button>`;
 }
@@ -135,28 +218,34 @@ function importMaster(){
 /* ===== BÁO CÁO ===== */
 function showSummary(){
   if(!CURRENT_STORE) return alert("❌ Chưa chọn cửa hàng");
-  const m=load("MASTER").filter(x=>!x.sold&&x.store===CURRENT_STORE);
+
+  const m=load("MASTER").filter(x=>!x.sold && x.store===CURRENT_STORE);
   const c=load("CHECK_"+today()+"_"+CURRENT_STORE);
 
-  let html=`<h3>📊 ${CURRENT_STORE}</h3><div class="box">`;
+  let html=`<h3>📊 Kiểm kê ${CURRENT_STORE}</h3><div class="box">`;
   let warn=false;
+
   m.forEach(x=>{
     if(!c.includes(x.qr)){
       warn=true;
-      html+=`<div class="warn">❌ ${x.qr}</div>`;
+      html+=`<div class="warn">❌ Thiếu: ${x.qr}</div>`;
     }
   });
-  if(!warn) html+=`<div class="ok">✅ OK</div>`;
+
+  if(!warn) html+=`<div class="ok">✅ TẤT CẢ ĐÚNG</div>`;
   html+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
   document.body.innerHTML=html;
 }
 
 function showHistory(){
-  let html=`<h3>📜 LỊCH SỬ</h3><div class="box">`;
+  let html=`<h3>📜 Lịch sử</h3><div class="box">`;
   load("HISTORY").forEach(x=>{
-    html+=`${x.time} | ${x.qr} | ${x.store}<br>`;
+    html+=`${x.time} | ${x.qr} | CH ${x.store}<br>`;
   });
   html+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
   document.body.innerHTML=html;
 }
 </script>
+
+</body>
+</html>
