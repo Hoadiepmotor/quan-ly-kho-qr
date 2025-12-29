@@ -32,11 +32,27 @@
 
 <div id="result">Chưa quét QR</div>
 
+<!-- MÀN HÌNH KẾT QUẢ -->
+<div id="resultScreen" style="display:none; margin-top:20px;">
+  <h3>📦 Thông tin sản phẩm</h3>
+  <p id="qrValue"></p>
+  <button onclick="location.reload()">🔁 Quét lại</button>
+</div>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
   function onScanSuccess(decodedText) {
-    document.getElementById("result").innerHTML =
-      "✅ Mã sản phẩm: <b>" + decodedText + "</b>";
+  // hiển thị kết quả
+  document.getElementById("qrValue").innerHTML =
+    "Mã sản phẩm: <b>" + decodedText + "</b>";
+
+  // ẩn camera + text cũ
+  document.getElementById("reader").style.display = "none";
+  document.getElementById("result").style.display = "none";
+
+  // hiện màn hình kết quả
+  document.getElementById("resultScreen").style.display = "block";
+}
   }
 
   let html5QrcodeScanner = new Html5QrcodeScanner(
@@ -49,3 +65,4 @@
 
 </body>
 </html>
+
