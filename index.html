@@ -16,7 +16,7 @@ body {
   max-width: 400px;
   margin: auto;
 }
-select, button {
+select, button, textarea {
   font-size: 16px;
   padding: 8px;
   margin: 6px;
@@ -36,10 +36,15 @@ select, button {
 
 <h2>📦 Quản lý kho QR</h2>
 
+<!-- ===== MENU ===== -->
+<button onclick="showImport()">📥 NHẬP DANH SÁCH CHUẨN</button>
+<button onclick="location.reload()">📷 QUÉT QR</button>
+
+<hr>
+
 <!-- ================= QUÉT QR ================= -->
 <div id="scanScreen">
   <div id="reader"></div>
-  <div id="result">Chưa quét QR</div>
 </div>
 
 <!-- ================= KẾT QUẢ ================= -->
@@ -66,7 +71,6 @@ select, button {
   </select><br>
 
   <button onclick="saveAction()">💾 Lưu</button>
-  <button onclick="location.reload()">🔁 Quét lại</button>
 </div>
 
 <hr>
@@ -76,30 +80,26 @@ select, button {
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
-/* =========================
-   DANH SÁCH GỐC (MASTER)
-   👉 SAU NÀY BẠN CÓ THỂ
-   ĐỔI THÀNH GOOGLE SHEET
-========================= */
-const MASTER = JSON.parse(localStorage.getItem("MASTER") || "[]");
-
-/* =========================
-   TIỆN ÍCH
-========================= */
+/* ===== TIỆN ÍCH ===== */
 const today = () => new Date().toISOString().slice(0,10);
 const load = k => JSON.parse(localStorage.getItem(k) || "[]");
 const save = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
 
-/* =========================
-   CAMERA SAU
-========================= */
+/* ===== CAMERA ===== */
 const qr = new Html5Qrcode("reader");
 Html5Qrcode.getCameras().then(cams=>{
   const cam = cams.find(c=>c.label.toLowerCase().includes("back")) || cams[cams.length-1];
   qr.start(cam.id,{fps:10,qrbox:250},onScan);
 });
 
+/* ===== QUÉT QR ===== */
 function onScan(text){
+  const master = load("MASTER");
+  if(master.length && !master.find(x=>x.qr===text)){
+    alert("❌ QR KHÔNG THUỘC DANH SÁCH CHUẨN");
+    return;
+  }
+
   qr.stop();
   window.currentQR = text;
   document.getElementById("qrValue").innerHTML = "<b>"+text+"</b>";
@@ -107,99 +107,101 @@ function onScan(text){
   document.getElementById("resultScreen").style.display="block";
 }
 
-/* =========================
-   LƯU HÀNH ĐỘNG
-   ❗ KHÔNG BAO GIỜ BỊ TRÙNG
-========================= */
+/* ===== LƯU ===== */
 function saveAction(){
-  const action = document.getElementById("action").value;
-  const store  = document.getElementById("store").value;
+  const action = actionSel.value;
+  const store  = storeSel.value;
 
-  /* ===== LỊCH SỬ ===== */
   const history = load("HISTORY");
-  history.push({
-    qr: currentQR,
-    action,
-    store,
-    time: new Date().toLocaleString()
-  });
-  save("HISTORY", history);
+  history.push({qr:currentQR,action,store,time:new Date().toLocaleString()});
+  save("HISTORY",history);
 
-  /* ===== MASTER ===== */
   let master = load("MASTER");
   let item = master.find(x=>x.qr===currentQR);
 
   if(!item){
-    item = { qr: currentQR, store, sold:false };
+    item = {qr:currentQR,store,sold:false};
     master.push(item);
   }
 
-  if(action==="out"){
-    item.sold = true;           // bán xong → không kiểm kê
-  } else {
-    item.store = store;        // nhập / điều chuyển
-  }
+  if(action==="out") item.sold=true;
+  else item.store=store;
 
-  save("MASTER", master);
+  save("MASTER",master);
 
-  /* ===== KIỂM KÊ (1 QR = 1 DÒNG) ===== */
   if(action!=="out"){
-    const key = "CHECK_"+today();
-    let checks = load(key);
-
-    // ❌ xóa bản ghi cũ cùng QR
-    checks = checks.filter(c=>c.qr!==currentQR);
-
-    // ✅ ghi lại
+    const key="CHECK_"+today();
+    let checks=load(key).filter(c=>c.qr!==currentQR);
     checks.push({qr:currentQR,store});
     save(key,checks);
   }
 
-  alert("Đã lưu ✔");
+  alert("✅ Đã lưu");
   location.reload();
 }
 
-/* =========================
-   KẾT QUẢ KIỂM KÊ
-========================= */
+/* ===== NHẬP MASTER ===== */
+function showImport(){
+  document.body.innerHTML=`
+    <h3>📥 NHẬP DANH SÁCH CHUẨN</h3>
+    <textarea id="input" rows="10" style="width:100%"
+    placeholder="QR001,242\nQR002,250"></textarea><br>
+    <button onclick="importMaster()">💾 Lưu</button>
+    <button onclick="location.reload()">⬅ Quay lại</button>`;
+}
+
+function importMaster(){
+  const lines=document.getElementById("input").value.trim().split("\n");
+  let master=[];
+  lines.forEach(l=>{
+    const [qr,store]=l.split(",");
+    if(qr&&store) master.push({qr:qr.trim(),store:store.trim(),sold:false});
+  });
+  save("MASTER",master);
+  alert("✅ Đã nhập danh sách chuẩn");
+  location.reload();
+}
+
+/* ===== KIỂM KÊ ===== */
 function showSummary(){
-  const checks = load("CHECK_"+today());
-  const master = load("MASTER");
+  const checks=load("CHECK_"+today());
+  const master=load("MASTER");
+  let html=`<h3>📊 KIỂM KÊ ${today()}</h3><div class="box">`;
+  let warn=false;
 
-  let warn = false;
-  let html = `<h3>📊 KẾT QUẢ KIỂM KÊ ${today()}</h3><div class="box">`;
-
-  master.forEach(x=>{
-    if(x.sold) return;
-    const found = checks.find(c=>c.qr===x.qr && c.store===x.store);
-    if(!found){
-      warn = true;
-      html += `<div class="warn">🚨 ${x.qr} | Cửa hàng ${x.store}</div>`;
+  master.forEach(m=>{
+    if(m.sold) return;
+    if(!checks.find(c=>c.qr===m.qr && c.store===m.store)){
+      warn=true;
+      html+=`<div class="warn">❌ THIẾU: ${m.qr} | CH ${m.store}</div>`;
     }
   });
 
-  if(!warn){
-    html += `<div class="ok">✅ XONG – KHÔNG CÓ CẢNH BÁO</div>`;
-  }
-
-  html += `</div><button onclick="location.reload()">⬅ Quay lại</button>`;
-  document.body.innerHTML = html;
-}
-
-/* =========================
-   LỊCH SỬ
-========================= */
-function showHistory(){
-  const h = load("HISTORY");
-  let html = `<h3>📜 LỊCH SỬ THAO TÁC</h3><div class="box">`;
-
-  h.forEach(x=>{
-    html += `${x.time} | ${x.qr} | ${x.action} | CH ${x.store}<br>`;
+  checks.forEach(c=>{
+    if(!master.find(m=>m.qr===c.qr)){
+      warn=true;
+      html+=`<div class="warn">⚠️ HÀNG NGOÀI: ${c.qr}</div>`;
+    }
   });
 
-  html += `</div><button onclick="location.reload()">⬅ Quay lại</button>`;
-  document.body.innerHTML = html;
+  if(!warn) html+=`<div class="ok">✅ TẤT CẢ ĐÚNG CHUẨN</div>`;
+  html+=`</div><button onclick="location.reload()">⬅ Quay lại</button>`;
+  document.body.innerHTML=html;
 }
+
+/* ===== LỊCH SỬ ===== */
+function showHistory(){
+  const h=load("HISTORY");
+  let html=`<h3>📜 LỊCH SỬ</h3><div class="box">`;
+  h.forEach(x=>{
+    html+=`${x.time} | ${x.qr} | ${x.action} | CH ${x.store}<br>`;
+  });
+  html+=`</div><button onclick="location.reload()">⬅ Quay lại</button>`;
+  document.body.innerHTML=html;
+}
+
+const actionSel=document.getElementById("action");
+const storeSel=document.getElementById("store");
 </script>
 
 </body>
