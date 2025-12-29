@@ -16,6 +16,11 @@
       max-width: 400px;
       margin: auto;
     }
+    select, input, button {
+      font-size: 16px;
+      padding: 6px;
+      margin: 5px;
+    }
   </style>
 </head>
 
@@ -24,20 +29,37 @@
 <h2>📦 Quét QR sản phẩm</h2>
 
 <div id="reader"></div>
-
 <div id="result">Chưa quét QR</div>
 
 <!-- MÀN HÌNH KẾT QUẢ -->
 <div id="resultScreen" style="display:none; margin-top:20px;">
   <h3>📦 Thông tin sản phẩm</h3>
   <p id="qrValue"></p>
-  <button onclick="location.reload()">🔁 Quét lại</button>
+
+  <label>Hành động</label><br>
+  <select id="action">
+    <option value="in">➕ Nhập kho</option>
+    <option value="out">➖ Xuất bán</option>
+    <option value="move">🔄 Điều chuyển</option>
+  </select><br>
+
+  <label>Số lượng</label><br>
+  <input type="number" id="qty" value="1" min="1"><br>
+
+  <button onclick="saveTransaction()">💾 Lưu</button>
+  <button onclick="location.reload()">🔁 Quét tiếp</button>
+
+  <hr>
+  <h4>📊 Tồn kho hiện tại</h4>
+  <p id="stock">0</p>
 </div>
 
 <!-- THƯ VIỆN QUÉT QR -->
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <script>
+  let currentCode = "";
+
   const html5QrCode = new Html5Qrcode("reader");
 
   Html5Qrcode.getCameras().then(cameras => {
@@ -46,7 +68,6 @@
       return;
     }
 
-    // 👉 ÉP DÙNG CAMERA SAU
     const backCamera =
       cameras.find(cam => cam.label.toLowerCase().includes("back")) ||
       cameras[cameras.length - 1];
@@ -55,26 +76,56 @@
       backCamera.id,
       { fps: 10, qrbox: 250 },
       decodedText => {
-        // hiển thị kết quả
+        currentCode = decodedText;
+
         document.getElementById("qrValue").innerHTML =
           "Mã sản phẩm: <b>" + decodedText + "</b>";
 
-        // tắt camera hoàn toàn
         html5QrCode.stop();
 
-        // ẩn màn hình quét
         document.getElementById("reader").style.display = "none";
         document.getElementById("result").style.display = "none";
-
-        // hiện màn hình kết quả
         document.getElementById("resultScreen").style.display = "block";
+
+        showStock();
       }
     );
-  }).catch(err => {
-    alert("Lỗi camera: " + err);
   });
+
+  function getStockData() {
+    return JSON.parse(localStorage.getItem("stockData")) || {};
+  }
+
+  function saveStockData(data) {
+    localStorage.setItem("stockData", JSON.stringify(data));
+  }
+
+  function showStock() {
+    const data = getStockData();
+    document.getElementById("stock").innerText = data[currentCode] || 0;
+  }
+
+  function saveTransaction() {
+    const action = document.getElementById("action").value;
+    const qty = parseInt(document.getElementById("qty").value);
+
+    if (!qty || qty <= 0) {
+      alert("Số lượng không hợp lệ");
+      return;
+    }
+
+    const data = getStockData();
+    if (!data[currentCode]) data[currentCode] = 0;
+
+    if (action === "in") data[currentCode] += qty;
+    if (action === "out" || action === "move") data[currentCode] -= qty;
+
+    saveStockData(data);
+    showStock();
+
+    alert("✅ Đã lưu giao dịch");
+  }
 </script>
 
 </body>
 </html>
-
