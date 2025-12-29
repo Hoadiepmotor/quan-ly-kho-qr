@@ -7,13 +7,13 @@
 
 <style>
 body { font-family: Arial; text-align: center; padding: 10px; }
-button, select, input, textarea {
-  font-size:16px; padding:8px; margin:6px;
+#reader { width: 100%; max-width: 400px; margin: auto; }
+select, button, textarea, input {
+  font-size: 16px; padding: 8px; margin: 6px;
 }
-#reader { width:100%; max-width:400px; margin:auto; }
-.box { border:1px solid #ccc; padding:10px; margin:10px; border-radius:8px; }
 .warn { color:red; font-weight:bold }
 .ok { color:green; font-weight:bold }
+.box { border:1px solid #ccc; padding:10px; margin:10px; border-radius:8px; }
 </style>
 </head>
 
@@ -21,13 +21,13 @@ button, select, input, textarea {
 
 <h2>📦 Quản lý kho QR</h2>
 
-<!-- ===== MENU ===== -->
+<!-- ================= MENU ================= -->
 <div id="menu">
   <button onclick="goEmployee()">👷 Nhân viên</button>
   <button onclick="goLogin()">👨‍💼 Quản lý</button>
 </div>
 
-<!-- ===== LOGIN ===== -->
+<!-- ================= LOGIN ================= -->
 <div id="loginScreen" style="display:none">
   <h3>🔐 Đăng nhập quản lý</h3>
   <input type="password" id="password" placeholder="Mật khẩu"><br>
@@ -35,15 +35,16 @@ button, select, input, textarea {
   <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ===== ADMIN ===== -->
+<!-- ================= ADMIN ================= -->
 <div id="adminScreen" style="display:none">
   <h3>👨‍💼 QUẢN LÝ</h3>
   <button onclick="showImport()">📥 Nhập / cập nhật MASTER</button><br>
+  <button onclick="showMaster()">📋 Xem danh sách MASTER</button><br>
   <button onclick="logout()">🚪 Đăng xuất</button><br>
   <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ===== CHỌN CỬA HÀNG ===== -->
+<!-- ================= STORE ================= -->
 <div id="storeScreen" style="display:none">
   <h3>🏪 Chọn cửa hàng</h3>
   <select id="storeSelect">
@@ -55,17 +56,18 @@ button, select, input, textarea {
     <option>891</option>
     <option>581</option>
   </select><br>
-  <button onclick="startSession()">▶ Bắt đầu kiểm kê</button>
+  <button onclick="startSession()">▶ Bắt đầu</button>
   <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ===== SCAN (KHÔNG display:none) ===== -->
-<div id="scanScreen" style="visibility:hidden; height:0">
-  <h3>📷 Kiểm kê cửa hàng <span id="currentStore"></span></h3>
+<!-- ================= SCAN ================= -->
+<div id="scanScreen" style="display:none">
+  <h3>📷 Kiểm kê CH <span id="currentStore"></span></h3>
   <div id="reader"></div>
+  <button onclick="goHome()">⬅ Trang chủ</button>
 </div>
 
-<!-- ===== RESULT ===== -->
+<!-- ================= RESULT ================= -->
 <div id="resultScreen" style="display:none">
   <h3 id="qrValue"></h3>
   <button onclick="saveCheck()">💾 Ghi nhận</button>
@@ -85,26 +87,19 @@ const ADMIN_PASS = "123456";
 const today = () => new Date().toISOString().slice(0,10);
 const load = k => JSON.parse(localStorage.getItem(k) || "[]");
 const save = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
-
-/* ===== ẨN SCREEN ===== */
-function hideScreens(){
-  menu.style.display="none";
-  loginScreen.style.display="none";
-  adminScreen.style.display="none";
-  storeScreen.style.display="none";
-  resultScreen.style.display="none";
-}
+const hideAll = () =>
+  document.querySelectorAll("div").forEach(d=>d.style.display="none");
 
 /* ===== ĐIỀU HƯỚNG ===== */
 function goHome(){ location.reload(); }
-function goEmployee(){ hideScreens(); storeScreen.style.display="block"; }
-function goLogin(){ hideScreens(); loginScreen.style.display="block"; }
+function goEmployee(){ hideAll(); storeScreen.style.display="block"; }
+function goLogin(){ hideAll(); loginScreen.style.display="block"; }
 
 /* ===== LOGIN ===== */
 function login(){
   if(password.value !== ADMIN_PASS) return alert("❌ Sai mật khẩu");
   localStorage.setItem("ADMIN","1");
-  hideScreens();
+  hideAll();
   adminScreen.style.display="block";
 }
 function logout(){
@@ -117,63 +112,53 @@ let CURRENT_STORE = null;
 
 function startSession(){
   if(!storeSelect.value) return alert("❌ Chưa chọn cửa hàng");
-
   CURRENT_STORE = storeSelect.value;
-  localStorage.setItem("CURRENT_STORE", CURRENT_STORE);
-
-  hideScreens();
-
-  scanScreen.style.visibility="visible";
-  scanScreen.style.height="auto";
+  localStorage.setItem("CURRENT_STORE",CURRENT_STORE);
+  hideAll();
   scanScreen.style.display="block";
-
   currentStore.innerText = CURRENT_STORE;
-
-  setTimeout(startCamera, 500);
+  startCamera();
 }
 
 /* ===== CAMERA ===== */
-let qrScanner = null;
+let qrScanner;
 
 function startCamera(){
-  if(qrScanner){
-    qrScanner.clear().catch(()=>{});
-  }
-
   qrScanner = new Html5Qrcode("reader");
-
   Html5Qrcode.getCameras().then(cams=>{
-    if(!cams.length) return alert("❌ Không có camera");
-
     const cam =
-      cams.find(c=>/back|rear|environment/i.test(c.label))
-      || cams[cams.length-1];
-
-    qrScanner.start(
-      cam.id,
-      { fps:10, qrbox:250 },
-      onScan
-    );
+      cams.find(c=>/back|rear|environment/i.test(c.label)) || cams[cams.length-1];
+    qrScanner.start(cam.id,{fps:10,qrbox:250},onScan);
   });
 }
 
-/* ===== QUÉT ===== */
+/* ===== SCAN LOGIC ===== */
 function onScan(text){
   const master = load("MASTER");
   const item = master.find(x=>x.qr===text);
 
-  if(master.length && !item) return alert("❌ HÀNG NGOÀI");
-  if(item?.sold) return alert("❌ ĐÃ BÁN");
-  if(item && item.store!==CURRENT_STORE) return alert("⚠️ SAI CỬA HÀNG");
+  if(master.length && !item){
+    alert("❌ MÃ KHÔNG CÓ TRONG CỬA HÀNG");
+    return;
+  }
+
+  if(item?.sold){
+    alert("❌ MÃ ĐÃ BÁN");
+    return;
+  }
+
+  if(item && item.store !== CURRENT_STORE){
+    alert("⚠️ SAI CỬA HÀNG");
+    return;
+  }
 
   qrScanner.stop();
   window.currentQR = text;
-
   qrValue.innerText = text;
   resultScreen.style.display="block";
 }
 
-/* ===== GHI NHẬN ===== */
+/* ===== SAVE CHECK ===== */
 function saveCheck(){
   const key = "CHECK_"+today()+"_"+CURRENT_STORE;
   let c = load(key).filter(x=>x!==currentQR);
@@ -189,17 +174,16 @@ function saveCheck(){
 
 function resumeScan(){
   resultScreen.style.display="none";
-  setTimeout(startCamera,300);
+  setTimeout(()=>startCamera(),500);
 }
 
 /* ===== MASTER ===== */
 function showImport(){
   if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
-
   document.body.innerHTML=`
     <h3>📥 NHẬP / CẬP NHẬT MASTER</h3>
     <textarea id="input" rows="10" style="width:100%"
-      placeholder="QR001,242"></textarea><br>
+    placeholder="QR001,242"></textarea><br>
     <button onclick="importMaster()">💾 Lưu</button>
     <button onclick="location.reload()">⬅ Trang chủ</button>`;
 }
@@ -215,32 +199,36 @@ function importMaster(){
   location.reload();
 }
 
-/* ===== BÁO CÁO ===== */
+function showMaster(){
+  if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
+  const m = load("MASTER");
+  let html = `<h3>📋 MASTER (${m.length})</h3><div class="box">`;
+  m.forEach(x=>{
+    html+=`${x.qr} | CH ${x.store}<br>`;
+  });
+  html+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
+  document.body.innerHTML=html;
+}
+
+/* ===== REPORT ===== */
 function showSummary(){
   if(!CURRENT_STORE) return alert("❌ Chưa chọn cửa hàng");
-
-  const m=load("MASTER").filter(x=>!x.sold && x.store===CURRENT_STORE);
+  const m=load("MASTER").filter(x=>x.store===CURRENT_STORE);
   const c=load("CHECK_"+today()+"_"+CURRENT_STORE);
-
-  let html=`<h3>📊 Kiểm kê ${CURRENT_STORE}</h3><div class="box">`;
+  let html=`<h3>📊 ${CURRENT_STORE}</h3><div class="box">`;
   let warn=false;
-
   m.forEach(x=>{
-    if(!c.includes(x.qr)){
-      warn=true;
-      html+=`<div class="warn">❌ Thiếu: ${x.qr}</div>`;
-    }
+    if(!c.includes(x.qr)){warn=true;html+=`<div class="warn">❌ ${x.qr}</div>`;}
   });
-
-  if(!warn) html+=`<div class="ok">✅ TẤT CẢ ĐÚNG</div>`;
+  if(!warn) html+=`<div class="ok">✅ OK</div>`;
   html+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
   document.body.innerHTML=html;
 }
 
 function showHistory(){
-  let html=`<h3>📜 Lịch sử</h3><div class="box">`;
+  let html=`<h3>📜 LỊCH SỬ</h3><div class="box">`;
   load("HISTORY").forEach(x=>{
-    html+=`${x.time} | ${x.qr} | CH ${x.store}<br>`;
+    html+=`${x.time} | ${x.qr} | ${x.store}<br>`;
   });
   html+=`</div><button onclick="location.reload()">⬅ Trang chủ</button>`;
   document.body.innerHTML=html;
