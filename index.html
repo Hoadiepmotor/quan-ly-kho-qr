@@ -80,7 +80,7 @@ select, button, textarea, input {
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
 /* ===== CẤU HÌNH ===== */
-const ADMIN_PASS = "123456"; // đổi nếu cần
+const ADMIN_PASS = "123456"; // 🔑 đổi nếu cần
 
 /* ===== TIỆN ÍCH ===== */
 const today = () => new Date().toISOString().slice(0,10);
@@ -162,7 +162,7 @@ function resumeScan(){
   startCamera();
 }
 
-/* ===== MASTER (KHÔNG XÓA CHECK) ===== */
+/* ===== MASTER (KHÔNG RESET) ===== */
 function showImport(){
   if(!localStorage.getItem("ADMIN")) return alert("❌ Không có quyền");
   document.body.innerHTML=`
